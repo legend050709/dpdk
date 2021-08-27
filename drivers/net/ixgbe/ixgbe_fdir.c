@@ -448,6 +448,7 @@ ixgbe_fdir_store_input_mask_82599(struct rte_eth_dev *dev,
 	uint16_t dst_ipv6m = 0;
 	uint16_t src_ipv6m = 0;
 
+    /*  ixgbe 设置 fdir 掩码 */
 	memset(&info->mask, 0, sizeof(struct ixgbe_hw_fdir_mask));
 	info->mask.vlan_tci_mask = input_mask->vlan_tci_mask;
 	info->mask.src_port_mask = input_mask->src_port_mask;
@@ -1437,6 +1438,9 @@ ixgbe_fdir_info_get(struct rte_eth_dev *dev, struct rte_eth_fdir_info *fdir_info
 	else if (fdir_info->mode == RTE_FDIR_MODE_SIGNATURE)
 		fdir_info->guarant_spc = max_num * 4;
 
+    /*
+        ixgbe 驱动对于 fdir 的mask进行获取;
+    */
 	fdir_info->mask.vlan_tci_mask = info->mask.vlan_tci_mask;
 	fdir_info->mask.ipv4_mask.src_ip = info->mask.src_ipv4_mask;
 	fdir_info->mask.ipv4_mask.dst_ip = info->mask.dst_ipv4_mask;
@@ -1555,6 +1559,9 @@ ixgbe_fdir_ctrl_func(struct rte_eth_dev *dev,
 	if (arg == NULL && filter_op != RTE_ETH_FILTER_FLUSH)
 		return -EINVAL;
 
+    /*
+        ixgbe fdir 的增删改查;
+    */
 	switch (filter_op) {
 	case RTE_ETH_FILTER_ADD:
 		ret = ixgbe_add_del_fdir_filter(dev,

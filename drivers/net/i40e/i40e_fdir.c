@@ -2046,7 +2046,9 @@ i40e_fdir_info_get(struct rte_eth_dev *dev, struct rte_eth_fdir_info *fdir)
 	i40e_fdir_info_get_flex_mask(pf,
 				fdir->flex_conf.flex_mask,
 				&num_flex_mask);
-
+    /*
+        如上所示，i40e 驱动并没有对 mask 进行获取;
+    */
 	fdir->flex_conf.nb_payloads = num_flex_set;
 	fdir->flex_conf.nb_flexmasks = num_flex_mask;
 }
