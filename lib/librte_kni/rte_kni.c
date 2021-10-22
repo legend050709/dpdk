@@ -250,6 +250,9 @@ rte_kni_alloc(struct rte_mempool *pktmbuf_pool,
 	dev_info.core_id = conf->core_id;
 	dev_info.force_bind = conf->force_bind;
 	dev_info.group_id = conf->group_id;
+    /*
+        注意用于限制经过kni往外发送的数据包的大小;
+    */
 	dev_info.mbuf_size = conf->mbuf_size;
 	dev_info.mtu = conf->mtu;
 
@@ -265,6 +268,7 @@ rte_kni_alloc(struct rte_mempool *pktmbuf_pool,
 	if (ret < 0)
 		goto mz_fail;
 
+    /* KNI_FIFO_COUNT_MAX 默认为 1024 */
 	/* TX RING */
 	kni->tx_q = kni->m_tx_q->addr;
 	kni_fifo_init(kni->tx_q, KNI_FIFO_COUNT_MAX);
@@ -304,6 +308,9 @@ rte_kni_alloc(struct rte_mempool *pktmbuf_pool,
 	kni->group_id = conf->group_id;
 	kni->mbuf_size = conf->mbuf_size;
 
+    /*
+        底层调用的是：kni_ioctl--》kni_ioctl_create
+    */
 	ret = ioctl(kni_fd, RTE_KNI_IOCTL_CREATE, &dev_info);
 	if (ret < 0)
 		goto ioctl_fail;
@@ -345,6 +352,9 @@ kni_free_fifo(struct rte_kni_fifo *fifo)
 	} while (ret);
 }
 
+/*
+    virtual addr --> phy addr
+*/
 static void *
 va2pa(struct rte_mbuf *m)
 {
@@ -500,6 +510,16 @@ rte_kni_handle_request(struct rte_kni *kni)
 
 	/* Analyze the request and call the relevant actions for it */
 	switch (req->req_id) {
+    /*
+        kni_handle_request:
+            kni handle 来自于用户的 request, 主要是配置接口的 mtu, 
+            更改接口的mac, 设置接口的up/down, 设置混杂模式(tcpdump会设置接口混杂模式);
+            TODO_TODO: 获取接口的信息，比如ifconfig 不算是 request 吗?
+
+        区分:
+            用户态检查通过lan/wan 发包进行区分;
+            通过 lan/wan 发包，则直接 rte_kni_rx_burst 就可以获取到从内核发出的包;
+    */
 	case RTE_KNI_REQ_CHANGE_MTU: /* Change MTU */
 		if (kni->ops.change_mtu)
 			req->result = kni->ops.change_mtu(kni->ops.port_id,
@@ -542,6 +562,14 @@ rte_kni_handle_request(struct rte_kni *kni)
 	return 0;
 }
 
+/*
+    经过kni 向内核发送数据包; 即 kni--->内核(对于kni而言，就是发包)
+        mbufs:  要发送的报文数组;
+        num:    要发送的报文的个数;
+
+    返回值：
+        实际成功发送的报文的个数;
+*/
 unsigned
 rte_kni_tx_burst(struct rte_kni *kni, struct rte_mbuf **mbufs, unsigned num)
 {
@@ -552,6 +580,13 @@ rte_kni_tx_burst(struct rte_kni *kni, struct rte_mbuf **mbufs, unsigned num)
 	for (i = 0; i < num; i++)
 		phy_mbufs[i] = va2pa(mbufs[i]);
 
+    /*
+        将 num 个报文放入到 kni的 rx_q队列中;
+        返回实际成功放入的报文的个数;
+
+        TODO_TODO: 如果大量的报文通过kni上送给内核，但是应用程序从内核中取报文的
+                   速度较慢，可能就会导致rx_q满，进而发生了丢包;
+    */
 	ret = kni_fifo_put(kni->rx_q, phy_mbufs, num);
 
 	/* Get mbufs from free_q and then free them */
@@ -560,6 +595,11 @@ rte_kni_tx_burst(struct rte_kni *kni, struct rte_mbuf **mbufs, unsigned num)
 	return ret;
 }
 
+/*
+    应用程序经过内核往外发包;
+    则kni从内核中取包，然后发送出去；
+    即：内核---》kni(对于kni而言，就是收包)
+*/
 unsigned
 rte_kni_rx_burst(struct rte_kni *kni, struct rte_mbuf **mbufs, unsigned num)
 {
@@ -572,6 +612,7 @@ rte_kni_rx_burst(struct rte_kni *kni, struct rte_mbuf **mbufs, unsigned num)
 	return ret;
 }
 
+/* Get mbufs from free_q and then free them */
 static void
 kni_free_mbufs(struct rte_kni *kni)
 {
@@ -617,6 +658,9 @@ kni_allocate_mbufs(struct rte_kni *kni)
 	allocq_free = (kni->alloc_q->read - kni->alloc_q->write - 1) \
 			& (MAX_MBUF_BURST_NUM - 1);
 	for (i = 0; i < allocq_free; i++) {
+        /*
+            从 kni 的 mbufpool 中申请 allocq_free 个 mbuf;
+        */
 		pkts[i] = rte_pktmbuf_alloc(kni->pktmbuf_pool);
 		if (unlikely(pkts[i] == NULL)) {
 			/* Out of memory */
@@ -630,6 +674,10 @@ kni_allocate_mbufs(struct rte_kni *kni)
 	if (i <= 0)
 		return;
 
+    /*
+        将申请的 i 个mbuf 放入到 kni的 alloc_q 队列中，
+        内核外网发包时，则从alloc_q中取包;
+    */
 	ret = kni_fifo_put(kni->alloc_q, phys, i);
 
 	/* Check if any mbufs not put into alloc_q, and then free them */

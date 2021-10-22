@@ -341,13 +341,27 @@ __rte_ring_do_enqueue(struct rte_ring *r, void * const *obj_table,
 	uint32_t prod_head, prod_next;
 	uint32_t free_entries;
 
+    /*
+        更新ring的 prod 的 head 指针;
+        返回值n:
+            进入队列的元素的个数
+    */
 	n = __rte_ring_move_prod_head(r, is_sp, n, behavior,
 			&prod_head, &prod_next, &free_entries);
 	if (n == 0)
 		goto end;
 
+    /*
+        n 个元素，进入到 队列 r中;
+        &r[1] 可以 理解为 ring 对应的数组,用于保存多个元素(指针);
+    */
 	ENQUEUE_PTRS(r, &r[1], prod_head, obj_table, n, void *);
 
+    /*  更新ring的 prod 生产者的 tail 指针; 
+            prod_head:  tail的老值（tail的老值也等于head的老值）;
+            prod_next:  tail的期望的值;
+            is_sp: 队列是否为单生产者队列;
+    */
 	update_tail(&r->prod, prod_head, prod_next, is_sp, 1);
 end:
 	if (free_space != NULL)

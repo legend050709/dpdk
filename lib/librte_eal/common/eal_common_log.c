@@ -424,6 +424,26 @@ rte_vlog(uint32_t level, uint32_t logtype, const char *format, va_list ap)
 	RTE_PER_LCORE(log_cur_msg).logtype = logtype;
 
 	ret = vfprintf(f, format, ap);
+    /*
+        
+        (1) fwrite 和 write;
+        fwrite也是通过write来实现的，fwrite是C语言的库，而write是系统调用。
+        差别在write每次写的数据是调用者要求的大小，
+        比如调用者要求写入10个字节数据，write就会写10个字节数据到内核缓冲区中，
+        所以依然涉及到用户态与內核态之间的切换，操作系统会定期地把这些存在内核缓冲区的数据写回磁盘中。
+        而fwrite不一样，fwrite每次都会先把数据写入一个应用进程缓冲区，等到该缓冲区满了，
+        或者调用类似调用fflush这种冲洗缓冲区的函数时，系统会调用write一次性把相应数据写进内核缓冲区中。
+        同样减少了系统调用(即write调用)。
+
+        (2) fflush 
+        fflush应该也是一个glibc库函数;
+        标准IO函数（如fread，fwrite等）会在内存中建立缓冲，该函数刷新内存缓冲，将内容写入内核缓冲，
+        要想将其真正写入磁盘，还需要调用fsync。
+        （即先调用fflush然后再调用fsync，否则不会起作用）。
+
+        (3)fsync:
+        
+    */
 	fflush(f);
 	return ret;
 }

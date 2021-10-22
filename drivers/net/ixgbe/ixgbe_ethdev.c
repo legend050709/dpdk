@@ -1070,6 +1070,9 @@ eth_ixgbe_dev_init(struct rte_eth_dev *eth_dev, void *init_params __rte_unused)
 
 	PMD_INIT_FUNC_TRACE();
 
+    /*
+        ixgbe 驱动的 批量收发包接口;
+    */
 	eth_dev->dev_ops = &ixgbe_eth_dev_ops;
 	eth_dev->rx_pkt_burst = &ixgbe_recv_pkts;
 	eth_dev->tx_pkt_burst = &ixgbe_xmit_pkts;

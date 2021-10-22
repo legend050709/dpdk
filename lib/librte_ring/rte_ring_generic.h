@@ -66,6 +66,7 @@ __rte_ring_move_prod_head(struct rte_ring *r, unsigned int is_sp,
 		/* Reset n to the initial burst count */
 		n = max;
 
+        //  保存之前的生产者的头的位置;
 		*old_head = r->prod.head;
 
 		/* add rmb barrier to avoid load/load reorder in weak
@@ -79,17 +80,33 @@ __rte_ring_move_prod_head(struct rte_ring *r, unsigned int is_sp,
 		 * *old_head > cons_tail). So 'free_entries' is always between 0
 		 * and capacity (which is < size).
 		 */
+		 // ring中剩余的可用空间;
 		*free_entries = (capacity + r->cons.tail - *old_head);
 
 		/* check that we have enough room in ring */
+        /*
+            要进入队列的元素的空间比剩余空间要大;
+
+            比如，进入固定数量个元素，则会一次性进入，要么都进入，要么都不进入。
+                  不会只进入一部分，另外一部分不进入;
+        */
 		if (unlikely(n > *free_entries))
 			n = (behavior == RTE_RING_QUEUE_FIXED) ?
 					0 : *free_entries;
 
+        // 剩余空间，不足以放入元素 && 进入固定数量的元素，则返回;
 		if (n == 0)
 			return 0;
 
+        /*
+            剩余空间足够 || 不是进入固定数量，而是尽可能的进入;
+            new_head: 保存期望进入之后的head的位置;
+        */
 		*new_head = *old_head + n;
+
+        /*
+            单生产者，则直接更新prod.head。不需cas保护；
+        */
 		if (is_sp)
 			r->prod.head = *new_head, success = 1;
 		else

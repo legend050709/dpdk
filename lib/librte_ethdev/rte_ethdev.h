@@ -4155,6 +4155,11 @@ rte_eth_tx_burst(uint16_t port_id, uint16_t queue_id,
 	}
 #endif
 
+    /*
+        对于 ixgbe 驱动的网卡: 批量发包的函数为： ixgbe_xmit_pkts
+        对于 kni 设备的：eth_kni_tx
+        对于mlx5-core的设备：mlx5_select_tx_function
+    */
 	return (*dev->tx_pkt_burst)(dev->data->tx_queues[queue_id], tx_pkts, nb_pkts);
 }
 

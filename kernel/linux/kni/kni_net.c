@@ -242,6 +242,9 @@ kni_net_tx(struct sk_buff *skb, struct net_device *dev)
 #endif
 
 	/* Check if the length of skb is less than mbuf size */
+    /*
+        检查发送的数据包的大小是否超过了 kni 设置的 mbuf_size的大小;
+    */
 	if (skb->len > kni->mbuf_size)
 		goto drop;
 
